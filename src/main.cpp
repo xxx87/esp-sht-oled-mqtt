@@ -33,8 +33,16 @@ String html_header = "<html>\
     <style>\
       body { background-color: #cccccc; font-family: Arial, Helvetica, Sans-Serif; Color: #000088; }\
     </style>\
-  </head>";
+  </head>\
+  <body>";
 
+void send_Data(String body) {
+  String str = "";
+  str += html_header;
+  str += body;
+  str += "</body></html>";
+  server.send(200, "text/html", str);
+}
 // Перезагрузка устройства.
 void reload(bool reset = false) {
   if (reset)                    // если reset = true, сбросить настройки и имитировать "первый запуск"
@@ -46,17 +54,12 @@ void reload(bool reset = false) {
 void handle_PageNotFound() { server.send(404, "text/plain", "Not found"); }
 
 void handle_SettingsHtmlPage() {
-  String str = "";
-  str += html_header;
-  str += "<body>\
-    <form method=\"POST\" action=\"ok\">\
+  String str = "<form method=\"POST\" action=\"ok\">\
       <input name=\"ssid\"> WIFI Net</br>\
       <input name=\"pswd\"> Password</br></br>\
       <input type=SUBMIT value=\"Save settings\">\
-    </form>\
-  </body>\
-  </html>";
-  server.send(200, "text/html", str);
+    </form>";
+  send_Data(str);
 }
 
 void handle_AccessPoint() {
@@ -64,8 +67,6 @@ void handle_AccessPoint() {
   String wifi_pass = server.arg(1); // пароль сети из get запроса
 
   String str = "";
-  str += html_header;
-  str += "<body>";
 
   if (server.args() > 0) { // if first call
     if (wifi_name != "") {
@@ -76,19 +77,16 @@ void handle_AccessPoint() {
 
       rwu.update(INIT_ADDR, INIT_KEY);
 
-      str += "Configuration saved in FLASH</br>\
-              Changes applied after reboot</p></br></br>\
-              <a href=\"/\">Return</a> to settings page</br>";
-
+      str = "Configuration saved in FLASH</br>\
+             Changes applied after reboot</p></br></br>\
+             <a href=\"/\">Return</a> to settings page</br>";
     } else {
-      str += "No WIFI Net</br>\
-    <a href=\"/\">Return</a> to settings page</br>";
+      str = "No WIFI Net</br>\
+             <a href=\"/\">Return</a> to settings page</br>";
     }
   };
 
-  // Serial.println(EEPROM.read(INIT_ADDR));
-  str += "</body></html>";
-  server.send(200, "text/html", str);
+  send_Data(str);
   reload();
 };
 // Если это первый запуск, запускаем модуль как точку доступа,
