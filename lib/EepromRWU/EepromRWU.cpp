@@ -30,12 +30,10 @@ int EepromRWU::write(int addrOffset, const String &strToWrite) {
   for (int i = 0; i < len; i++) {
     EEPROM.write(addrOffset + 1 + i, strToWrite[i]);
   }
-  // EEPROM.commit();
-  // EEPROM.end();
   return addrOffset + 1 + len;
 }
 
-void EepromRWU::update(int addr, int val) {
+void EepromRWU::write(int addr, const int val) {
   EEPROM.put(addr, val); //
   EEPROM.commit();
   EEPROM.end();

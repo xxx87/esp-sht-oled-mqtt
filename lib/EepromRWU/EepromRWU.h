@@ -18,6 +18,7 @@ public:
   EepromRWU(int eepromSize, int initAddr, int initKey);
   int read(int addrOffset, String *strToRead);
   int write(int addrOffset, const String &strToWrite);
+  void write(int addrOffset, const int val);
   void update(int addr, int val);
   bool isFirstRun();
 

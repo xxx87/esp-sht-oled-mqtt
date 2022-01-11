@@ -46,7 +46,7 @@ void send_Data(String body) {
 // Перезагрузка устройства.
 void reload(bool reset = false) {
   if (reset)                    // если reset = true, сбросить настройки и имитировать "первый запуск"
-    rwu.update(INIT_ADDR, 255); //
+    rwu.write(INIT_ADDR, 255); //
   delay(3000);                  // ждём 3 сек.
   ESP.deepSleep(3e6);           // глубокий сон на 3 сек. имитация перезагрузки
 }
@@ -75,7 +75,7 @@ void handle_AccessPoint() {
         rwu.write(put_wifi_ssid, wifi_pass);
       }
 
-      rwu.update(INIT_ADDR, INIT_KEY);
+      rwu.write(INIT_ADDR, INIT_KEY);
 
       str = "Configuration saved in FLASH</br>\
              Changes applied after reboot</p></br></br>\
@@ -136,13 +136,6 @@ void setup() {
   } else {
     runWebServer();
   }
-
-  // EEPROM.put(address, cod); // сохраняем код телефона в памяти Ардуино
-  // Serial.print("Size code: ");
-  // Serial.print(sizeof(cod));
-  // Serial.print(" ");
-  // Serial.print("Readed code: ");
-  // Serial.print(EEPROM.get(address, COD));
 }
 
 void loop() {
