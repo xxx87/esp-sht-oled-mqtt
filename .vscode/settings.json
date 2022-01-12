@@ -1,5 +1,6 @@
 {
   "files.associations": {
-    "*.tcc": "cpp"
+    "*.tcc": "cpp",
+    "iot_iconset_16x16.h": "c"
   }
 }
