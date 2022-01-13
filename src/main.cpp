@@ -7,7 +7,7 @@
 #include <ESP8266WiFi.h>
 #include <EepromRWU.h>
 #include <EncButton.h>
-#include <PubSubClient.h> // MQTT lib
+// #include <PubSubClient.h> // MQTT lib
 #include <TimerMs.h>
 #include <Wire.h> // i2c lib
 
@@ -53,12 +53,26 @@ void send_Data(String body) {
   server.send(200, "text/html", str);
 }
 // Перезагрузка устройства.
-void reload(bool reset = false) {
+void handle_Reload(bool reset = false) {
   if (reset)                   // если reset = true, сбросить настройки и имитировать "первый запуск"
     rwu.write(INIT_ADDR, 255); //
   delay(3000);                 // ждём 3 сек.
 
   ESP.deepSleep(3e6); // глубокий сон на 3 сек. имитация перезагрузки
+}
+
+void handle_Reset() {
+  if (resetBtn.held()) {
+    Serial.println("reset device..."); // однократно вернёт true при удержании
+    display.clearDisplay();            // Clear display buffer
+    display.setCursor(0, 18);
+    display.println("Device reset");
+    display.println(" ");
+    display.println("...REBOOT!");
+    display.display();
+
+    handle_Reload(true);
+  }
 }
 
 void handle_PageNotFound() { server.send(404, "text/plain", "Not found"); }
@@ -73,6 +87,14 @@ void handle_SettingsHtmlPage() {
 }
 
 void handle_AccessPoint() {
+  display.clearDisplay(); // Clear display buffer
+  display.setCursor(0, 18);
+  display.println("Settings saved");
+  display.println("successfully!");
+  display.println(" ");
+  display.println("...REBOOT!");
+  display.display();
+
   String wifi_name = server.arg(0); // имя сети из get запроса
   String wifi_pass = server.arg(1); // пароль сети из get запроса
 
@@ -97,15 +119,7 @@ void handle_AccessPoint() {
   };
 
   send_Data(str);
-
-  display.clearDisplay(); // Clear display buffer
-  display.setCursor(0, 18);
-  display.println("Settings saved");
-  display.println("successfully!");
-  display.println(" ");
-  display.println("...REBOOT!");
-  display.display();
-  reload();
+  handle_Reload();
 };
 
 void handle_WebServerOnConnect() {
@@ -118,7 +132,6 @@ void handle_WebServerOnConnect() {
 // Если это первый запуск, запускаем модуль как точку доступа,
 // чтоб юзер мог ввести имя и пароль от своей wifi сети:
 void runAsAp() {
-  display.clearDisplay(); // Clear display buffer
   display.setCursor(10, 0);
   display.println("Configuring AP");
 
@@ -129,26 +142,22 @@ void runAsAp() {
   display.setCursor(0, 18);
   display.println("AP IP address: ");
   display.println(myIP);
+  display.println(" ");
+  display.print("HTTP server started");
+  display.display();
 
   server.on("/", handle_SettingsHtmlPage);
   server.on("/ok", handle_AccessPoint);
   server.begin();
-
-  display.println(" ");
-  display.print("HTTP server started");
-  display.display();
 }
 
 void runWebServer() {
   WiFi.mode(WIFI_STA);
-  display.clearDisplay(); // Clear display buffer
 
   String ssid;
   String pass;
   int ssidAddrOffset = rwu.read(WIFI_DATA_START_ADDR, &ssid);
   rwu.read(ssidAddrOffset, &pass);
-
-  bool wifiIco = false;
 
   WiFi.begin(ssid, pass);
   // Wait for connection
@@ -157,25 +166,20 @@ void runWebServer() {
       Serial.print(".");
       ledState = !ledState;
       digitalWrite(ledPin, ledState);
-
-      if (wifiIco) {
-        display.drawBitmap(111, 1, wifi1_icon16x16, 16, 16, 1);
-        display.display();
-        wifiIco = !wifiIco;
-      } else {
-        display.clearDisplay(); // Clear display buffer
-        display.display();
-        wifiIco = !wifiIco;
-      }
+      display.drawBitmap(111, 1, wifi1_icon16x16, 16, 16, ledState);
+      display.display();
     }
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
-    ledState = HIGH;
-    display.drawBitmap(111, 1, wifi1_icon16x16, 16, 16, 1);
-    display.display();
-    digitalWrite(ledPin, ledState);
-  }
+  ledState = HIGH;
+  //
+  display.setCursor(0, 5);
+  display.print(WiFi.localIP());
+  display.drawBitmap(111, 1, wifi1_icon16x16, 16, 16, 1);
+  display.drawLine(0, 16, 124, 16, SSD1306_WHITE);
+  display.display();
+
+  digitalWrite(ledPin, ledState);
 
   server.on("/", handle_WebServerOnConnect);
   server.onNotFound(handle_PageNotFound);
@@ -199,17 +203,20 @@ void setup() {
   display.setTextSize(1); // указываем размер шрифта
   display.setTextColor(WHITE);
   display.clearDisplay();
+
+  display.drawBitmap(31, 18, temperature_icon16x16, 16, 16, 1);
+  display.drawBitmap(93, 18, humidity2_icon16x16, 16, 16, 1);
+  // for (byte i = 0; i < 10; i++) {
+  //   display.setCursor(0, 0); // установка курсора в позицию X = 0; Y = 0
+  //   display.print(i);        // записываем в буфер памяти дисплея нашу цифру
+  //   display.display();       // и её выводим на экран
+  //   delay(1000);             // ждём 0.5 секунды
+  // }
+
   display.display();
   // int sda = 2;  // qui SDC del sensore
   // int sdc = 14; // qui SDA del sensore
   // Wire.begin(sda, sdc);
-  // Serial.print("Setup init key: ");
-  // Serial.println(EEPROM.read(INIT_ADDR));
-
-  // Serial.print("Setup init key size: ");
-  // Serial.println(sizeof(EEPROM.read(INIT_ADDR)));
-
-  // runAsAp();
 
   if (rwu.isFirstRun()) { // первый запуск
     runAsAp();
@@ -219,6 +226,10 @@ void setup() {
 }
 
 void loop() {
+  server.handleClient();
+  handle_Reset();
+  // Если кнопка сброса зажата 5 сек, сбрасываем устройство.
+
   resetBtn.tick();
 
   if (resetBtn.press())
@@ -228,41 +239,35 @@ void loop() {
   if (resetBtn.release())
     Serial.println("release");
 
-  if (resetBtn.held()) {
-    Serial.println("reset device..."); // однократно вернёт true при удержании
-    reload(true);
-  }
-
-  server.handleClient();
   // if (dataTmr.tick()) {
   //   Serial.print(".");
   //   ledState = !ledState;
   //   Serial.print(ledState);
-  digitalWrite(ledPin, 1);
+  // digitalWrite(ledPin, 1);
   // }
 
-  if (millis() - my_timer >= period_time) {
-    my_timer = millis(); // "сбросить" таймер
-    // display.clearDisplay(); // Clear display buffer
+  // if (millis() - my_timer >= period_time) {
+  //   my_timer = millis(); // "сбросить" таймер
+  // display.clearDisplay(); // Clear display buffer
 
-    // // display.setTextSize(1);
+  // // display.setTextSize(1);
 
-    // // display.setTextColor(WHITE);
-    // display.setCursor(0, 0);
-    // display.println("Temp: Hum:");
-    // display.drawBitmap(111, 1, wifi1_icon16x16, 16, 16, 1);
-    // display.drawLine(0, 17, 124, 17, SSD1306_WHITE);
+  // // display.setTextColor(WHITE);
+  // display.setCursor(0, 0);
+  // display.println("Temp: Hum:");
+  // display.drawBitmap(111, 1, wifi1_icon16x16, 16, 16, 1);
+  // display.drawLine(0, 17, 124, 17, SSD1306_WHITE);
 
-    // //  display.setTextColor(WHITE);
-    // display.setCursor(0, 20);
-    // display.print(23.3, 1);
-    // display.print(" ");
-    // display.print(" ");
-    // display.print(33, 1);
-    // display.drawLine(0, 36, 124, 36, SSD1306_WHITE);
-    // display.setCursor(0, 39);
-    // display.print("P: ");
-    // display.print(66, 0);
-    // display.display();
-  }
+  // //  display.setTextColor(WHITE);
+  // display.setCursor(0, 20);
+  // display.print(23.3, 1);
+  // display.print(" ");
+  // display.print(" ");
+  // display.print(33, 1);
+  // display.drawLine(0, 36, 124, 36, SSD1306_WHITE);
+  // display.setCursor(0, 39);
+  // display.print("P: ");
+  // display.print(66, 0);
+  // display.display();
+  // }
 }
