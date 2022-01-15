@@ -187,9 +187,10 @@ void prinMainInfo(float temp, float hum) {
   display.setCursor(0, 5);
   display.print(WiFiIP);
   display.drawBitmap(111, 1, wifi1_icon16x16, 16, 16, 1);
+  display.drawBitmap(87, 1, sun_icon16x16, 16, 16, 1);
   display.drawLine(0, 16, 124, 16, SSD1306_WHITE);
-  display.drawBitmap(31, 18, temperature_icon16x16, 16, 16, 1);
-  display.drawBitmap(93, 18, humidity2_icon16x16, 16, 16, 1);
+  display.drawBitmap(31, 20, temperature_icon16x16, 16, 16, 1);
+  display.drawBitmap(93, 20, humidity2_icon16x16, 16, 16, 1);
   display.setTextSize(2);
   display.setCursor(12, 50); // cursor for TEMP
   display.print(temp, 1);
@@ -227,44 +228,18 @@ void setup() {
 }
 
 void loop() {
+  resetBtn.tick();
   server.handleClient();
   handle_Reset(); // Если кнопка сброса зажата 5 сек, сбрасываем устройство.
 
-  resetBtn.tick();
-
-  if (resetBtn.press())
-    Serial.println("press");
-  if (resetBtn.click())
-    Serial.println("click");
-  if (resetBtn.release())
-    Serial.println("release");
+  // if (resetBtn.press())
+  //   Serial.println("press");
+  // if (resetBtn.click())
+  //   Serial.println("click");
+  // if (resetBtn.release())
+  //   Serial.println("release");
 
   if (dataTmr.tick()) {
     prinMainInfo(random(10, 60), random(10, 60));
   }
-
-  // if (millis() - my_timer >= period_time) {
-  //   my_timer = millis(); // "сбросить" таймер
-  // display.clearDisplay(); // Clear display buffer
-
-  // // display.setTextSize(1);
-
-  // // display.setTextColor(WHITE);
-  // display.setCursor(0, 0);
-  // display.println("Temp: Hum:");
-  // display.drawBitmap(111, 1, wifi1_icon16x16, 16, 16, 1);
-  // display.drawLine(0, 17, 124, 17, SSD1306_WHITE);
-
-  // //  display.setTextColor(WHITE);
-  // display.setCursor(0, 20);
-  // display.print(23.3, 1);
-  // display.print(" ");
-  // display.print(" ");
-  // display.print(33, 1);
-  // display.drawLine(0, 36, 124, 36, SSD1306_WHITE);
-  // display.setCursor(0, 39);
-  // display.print("P: ");
-  // display.print(66, 0);
-  // display.display();
-  // }
 }
