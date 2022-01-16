@@ -11,7 +11,6 @@
 #ifndef EepromRWU_h
 #define EepromRWU_h
 #include <Arduino.h>
-#include <EEPROM.h>
 
 class EepromRWU {
 public:

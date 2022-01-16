@@ -1,31 +1,28 @@
-// #include "button.h"
-#include "iot_iconset_16x16.h"
-#include <Adafruit_GFX.h>     // OLED graphics lib
-#include <Adafruit_SSD1306.h> // OLED lib
-#include <Arduino.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266WiFi.h>
-#include <EepromRWU.h>
-#include <EncButton.h>
-// #include <PubSubClient.h> // MQTT lib
-#include <TimerMs.h>
-#include <Wire.h> // i2c lib
+#include "iot_iconset_16x16.h" // Icons
+#include <Adafruit_GFX.h>      // OLED graphics lib
+#include <Adafruit_SSD1306.h>  // OLED lib
+#include <Arduino.h>           // Main Arduino library
+#include <ESP8266WebServer.h>  // For WebServer
+#include <ESP8266WiFi.h>       // ESP8266 Wi-Fi
+#include <EepromRWU.h>         // My custom lib for EEPROM operations
+#include <EncButton.h>         // Lib for buttons handling
+#include <PubSubClient.h>      // MQTT lib
+#include <SHT2x.h>             // Lib for Temp/Hum sensor
+#include <TimerMs.h>           // Lib for timers
+#include <Wire.h>              // i2c lib
 
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
-#define OLED_RESET -1    // Reset pin # (or -1 if sharing Arduino reset pin)
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+#define SCREEN_WIDTH 128                                                  // OLED display width, in pixels
+#define SCREEN_HEIGHT 64                                                  // OLED display height, in pixels
+#define OLED_RESET -1                                                     // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET); // Инициализация OLED-экрана SSD1306 (128x64)
 
 #define INIT_ADDR 500            // номер резервной ячейки для ключа первого запуска
 #define INIT_KEY 50              // ключ первого запуска. 0-254, на выбор
 #define WIFI_DATA_START_ADDR 100 // адрес для начала записи/чтения данных о сохранённом ВайФай
 
-// unsigned long period_time = (long)5000;
-// unsigned long my_timer;
-// const char *ssid = "ax55_is_home";
-// const char *password = "@lk@tr@s_2020";
-IPAddress WiFiIP;
-EncButton<EB_TICK, 12> resetBtn;
+SHT2x sht;                               // Инициализация датчика температуры и влажности GY-21 HTU21 SI7021
+IPAddress WiFiIP;                        // IP-адрес Wi-Fi
+EncButton<EB_TICK, 12> resetBtn;         // Кнопка сброса
 String wifi_ssid = "Thermostat_ISA";     // имя точки доступа
 String wifi_password = "12345678";       // пароль точки доступа
 ESP8266WebServer server(80);             // веб-сервер на 80 порту
@@ -33,8 +30,12 @@ EepromRWU rwu(512, INIT_ADDR, INIT_KEY); // EEPROM size;
 TimerMs wifiTmr(500, 1, 0);              // Таймер подключения к ВайФай
 TimerMs dataTmr(3000, 1, 0);             // Таймер опроса данных
 TimerMs resetTmr(5000, 1, 0);            // Таймер для кнопки RESET
-int ledPin = 2;                          // led статуса
-int ledState = LOW;                      // Статус диода (по-умолчанию диод выключен)
+
+float temperature, humidity; // Temp, Humidity
+byte relayPin = 14;          // пин Реле
+byte relayState = HIGH;      // Статус реле (по-умолчанию Реле выключено)
+byte ledPin = 2;             // led статуса
+byte ledState = LOW;         // Статус диода (по-умолчанию диод выключен)
 
 String html_header = "<html>\
   <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\
@@ -53,27 +54,26 @@ void send_Data(String body) {
   str += "</body></html>";
   server.send(200, "text/html", str);
 }
-// Перезагрузка устройства.
-void handle_Reload(bool reset = false) {
+// Перезагрузка устройства:
+void device_reboot(bool reset = false) {
   if (reset)                   // если reset = true, сбросить настройки и имитировать "первый запуск"
     rwu.write(INIT_ADDR, 255); //
   delay(3000);                 // ждём 3 сек.
-
-  ESP.deepSleep(3e6); // глубокий сон на 3 сек. имитация перезагрузки
+  ESP.deepSleep(3e6);          // глубокий сон на 3 сек. имитация перезагрузки
 }
-
-void handle_Reset() {
-  if (resetBtn.held()) { // однократно вернёт true при удержании
+// Сброс устройства:
+void device_full_reset() {
+  if (resetBtn.held()) { // Если удерживаем кнопку, то сброс устройства
     Serial.println("reset device...");
 
-    display.clearDisplay(); // Clear display buffer
+    display.clearDisplay();
     display.setCursor(0, 18);
     display.println("Device reset");
     display.println(" ");
     display.println("...REBOOT!");
     display.display();
 
-    handle_Reload(true);
+    device_reboot(true);
   }
 }
 
@@ -121,7 +121,7 @@ void handle_SaveSettingsHtmlPage() {
   };
 
   send_Data(str);
-  handle_Reload();
+  device_reboot();
 };
 
 void handle_WebServerOnConnect() {
@@ -187,7 +187,7 @@ void prinMainInfo(float temp, float hum) {
   display.setCursor(0, 5);
   display.print(WiFiIP);
   display.drawBitmap(111, 1, wifi1_icon16x16, 16, 16, 1);
-  display.drawBitmap(87, 1, sun_icon16x16, 16, 16, 1);
+  display.drawBitmap(87, 1, sun_icon16x16, 16, 16, !relayState);
   display.drawLine(0, 16, 124, 16, SSD1306_WHITE);
   display.drawBitmap(31, 20, temperature_icon16x16, 16, 16, 1);
   display.drawBitmap(93, 20, humidity2_icon16x16, 16, 16, 1);
@@ -202,7 +202,15 @@ void prinMainInfo(float temp, float hum) {
 void setup() {
   Serial.begin(115200);
   pinMode(ledPin, OUTPUT);
+  pinMode(relayPin, OUTPUT);
   digitalWrite(ledPin, ledState);
+  digitalWrite(relayPin, relayState);
+
+  // int sda = 2; // qui SDC del sensore
+  // int sdc = 14; // qui SDA del sensore
+  // Wire.begin(sda, sdc);
+
+  sht.begin();
 
   resetBtn.setHoldTimeout(5000); // для сброса устройства, держать кнопку 5 сек.
 
@@ -215,10 +223,6 @@ void setup() {
   display.clearDisplay();
   display.display();
 
-  // int sda = 2;  // qui SDC del sensore
-  // int sdc = 14; // qui SDA del sensore
-  // Wire.begin(sda, sdc);
-
   if (rwu.isFirstRun()) { // Если первый запуск
     runAsAp();            // запускаем как Точку Доступа
   } else {
@@ -230,8 +234,20 @@ void setup() {
 void loop() {
   resetBtn.tick();
   server.handleClient();
-  handle_Reset(); // Если кнопка сброса зажата 5 сек, сбрасываем устройство.
+  device_full_reset(); // Если кнопка сброса зажата 5 сек, сбрасываем устройство.
+  sht.read();
 
+  temperature = sht.getTemperature();
+  humidity = sht.getHumidity();
+
+  if (temperature < 24.00) {
+    relayState = LOW;
+    digitalWrite(relayPin, relayState);
+  }
+  if (temperature > 25.00) {
+    relayState = HIGH;
+    digitalWrite(relayPin, relayState);
+  }
   // if (resetBtn.press())
   //   Serial.println("press");
   // if (resetBtn.click())
@@ -240,6 +256,14 @@ void loop() {
   //   Serial.println("release");
 
   if (dataTmr.tick()) {
-    prinMainInfo(random(10, 60), random(10, 60));
+    prinMainInfo(sht.getTemperature(), sht.getHumidity());
+
+    // uint8_t stat = sht.getStatus();
+    // Serial.println("**********");
+    // Serial.print("SHT Status: ");
+    // Serial.print(stat);
+    // Serial.println();
+    // Serial.print(stat, HEX);
+    // Serial.println("------------");
   }
 }
