@@ -37,15 +37,7 @@ byte relayState = HIGH;      // Статус реле (по-умолчанию �
 byte ledPin = 2;             // led статуса
 byte ledState = LOW;         // Статус диода (по-умолчанию диод выключен)
 
-String html_header = "<html>\
-  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\
-  <head>\
-    <title>ESP8266 Settings</title>\
-    <style>\
-      body { background-color: #cccccc; font-family: Arial, Helvetica, Sans-Serif; Color: #000088; }\
-    </style>\
-  </head>\
-  <body>";
+String html_header = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1.0' charset='utf-8' /> <title>ESP8266 Settings</title><style>body{background-color:#d6e5ff;font-family:Arial,Helvetica,Sans-Serif;color:#000088;height:100%;}.main-form{background-color:#ffffff;border-radius:25px;padding:30px;margin:0auto;max-width:600px;height:auto;}input{margin-bottom:10px;}label{display:inline-block;width:120px;text-align:right;}h2,p{text-align:center;}</style></head><body>";
 
 void send_Data(String body) {
   String str = "";
@@ -80,11 +72,8 @@ void device_full_reset() {
 void handle_PageNotFound() { server.send(404, "text/plain", "Not found"); }
 
 void handle_SettingsHtmlPage() {
-  String str = "<form method=\"POST\" action=\"ok\">\
-      <input name=\"ssid\"> WIFI Net</br>\
-      <input name=\"pswd\"> Password</br></br>\
-      <input type=SUBMIT value=\"Save settings\">\
-    </form>";
+  String str = "<div class='main-form'><h2>Thermostat settings</h2><form method='POST' action='ok'><p>Wi-Fi settings:</p><label for='ssid'>WIFI SSID:</label><input type='text' name='ssid'/><br/><label for='pswd'>WIFI Password:</label><input type='password' name='pswd'/><p>MQTT settings:</p><label for='mqttIP'>MQTT IP:</label><input type='text' name='mqttIP'/><br/><label for='mqttUser'>MQTT user:</label><input type='text' name='mqttUser'/><br/><label for='mqttPass'>MQTT pass:</label><input type='password' name='mqttPass'/><p>Temperature settings:</p><label for='minTemp'>Min temp:</label><input name='minTemp' type='range'step='0.1'value='21.5'min='15'max='40'oninput='this.nextElementSibling.value=this.value'/><output>21.5</output><label for='maxTemp'>Max temp:</label><input name='maxTemp' type='range'step='0.1'value='24.5'min='15'max='40'oninput='this.nextElementSibling.value=this.value'/><output>24.5</output><br/><br/><input type='submit'value='Save settings'/><a href='/'><input "
+               "type='button' value='Home' style='margin-left: 20px;' /></a></form></div>";
   send_Data(str);
 }
 
@@ -99,24 +88,34 @@ void handle_SaveSettingsHtmlPage() {
 
   String wifi_name = server.arg(0); // имя сети из get запроса
   String wifi_pass = server.arg(1); // пароль сети из get запроса
+  String mqtt_ip = server.arg(2);   // MQTT IP из get запроса
+  String mqtt_user = server.arg(3); // MQTT Login из get запроса
+  String mqtt_pass = server.arg(4); // MQTT Pass из get запроса
+  String min_temp = server.arg(5);  // minTemperature из get запроса
+  String max_temp = server.arg(6);  // maxTemperature сети из get запроса
 
   String str = "";
 
   if (server.args() > 0) { // if first call
+
+    for (int i = 0; i <= server.args(); i++) {
+      Serial.print(i);
+      Serial.print(": ");
+      Serial.println(server.arg(i));
+    }
+
     if (wifi_name != "") {
-      int put_wifi_ssid = rwu.write(WIFI_DATA_START_ADDR, wifi_name);
-      if (wifi_pass != "") {
-        rwu.write(put_wifi_ssid, wifi_pass);
-      }
+      // int put_wifi_ssid = rwu.write(WIFI_DATA_START_ADDR, wifi_name);
+
+      // if (wifi_pass != "") {
+      //   rwu.write(put_wifi_ssid, wifi_pass);
+      // }f
 
       rwu.write(INIT_ADDR, INIT_KEY);
 
-      str = "Configuration saved in FLASH</br>\
-             Changes applied after reboot</p></br></br>\
-             <a href=\"/\">Return</a> to settings page</br>";
+      str = "<div class='main-form'><h2>Настройки сохранены!</h2><p>Устройство будет перезагружено автоматически.</p></div>";
     } else {
-      str = "No WIFI Net</br>\
-             <a href=\"/\">Return</a> to settings page</br>";
+      str = "<div class='main-form'><h2>Ошибка!</h2><p>Не указано имя Wi-Fi сети</p></br><a href='/'>Вернуться</a> к странице настроек</div>";
     }
   };
 
@@ -125,9 +124,11 @@ void handle_SaveSettingsHtmlPage() {
 };
 
 void handle_WebServerOnConnect() {
-  String str = "WELCOME IN MAGIC WORLD</br>\
-             <p>Bla bla bla</p></br></br>\
-             <a href=\"google.com\">Return</a> to google page</br>";
+  String str = "<div class='main-form'>\
+                  <h2>Привет!</h2>\
+                  <p>Всё работает отлично</p></br>\
+                  <a href='/config'>Перейти</a> на страницу настроек\
+                </div>";
   send_Data(str);
 }
 
@@ -150,6 +151,7 @@ void runAsAp() {
 
   server.on("/", handle_SettingsHtmlPage);
   server.on("/ok", handle_SaveSettingsHtmlPage);
+  server.onNotFound(handle_PageNotFound);
   server.begin();
 }
 
@@ -177,6 +179,8 @@ void runWebServer() {
   digitalWrite(ledPin, HIGH);
 
   server.on("/", handle_WebServerOnConnect);
+  server.on("/config", handle_SettingsHtmlPage);
+  server.on("/ok", handle_SaveSettingsHtmlPage);
   server.onNotFound(handle_PageNotFound);
   server.begin();
 }
